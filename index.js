@@ -117,7 +117,6 @@ function search(q, title) {
         for (var j = 0; j < goodList.length; j++) {
           if (info.items[i].snippet.title.toLowerCase().contains(goodList[j])) {
             var best = i;
-            console.log(info.items[i].snippet.title);
             break loop1;
           } else {
             var best = i;
