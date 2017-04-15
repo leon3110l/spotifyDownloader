@@ -2,6 +2,7 @@ var yt = require('googleapis').youtube('v3');
 var ytdl = require("youtube-dl");
 var fs = require("fs");
 var https = require("https");
+var request = require("request");
 
 
 // get the spotify token from the user
@@ -25,58 +26,44 @@ function handler(req, res) {
 
 io.on("connection", function (socket) {
   socket.on("token", function(data) {
-    console.log(data.code);
     getToken(data.code);
   });
 });
 
 
 function getToken(code) {
-  const postData = JSON.stringify({
-    'grant_type': 'authorization_code',
+  var data = {
+    'grant_type': "authorization_code",
     'code': code,
-    'redirect_uri': 'http://localhost:8000'
-  });
-
-  const options = {
-    hostname: 'accounts.spotify.com',
-    port: 80,
-    path: '/api/token',
-    method: 'POST',
+    'redirect_uri': "http://localhost:8000"
+  }
+  var options = {
+    url: "https://accounts.spotify.com/api/token",
+    method: "POST",
+    json: true,
+    form: data,
     headers: {
-      'Authorization': "Basic " + btoa("f7fd010eb8204b7aabe4077d249ba905") + ":" + btoa("dfcc36a349bb4219baade50a51381b9c")
+      'Authorization': "Basic "+encodeB64("f7fd010eb8204b7aabe4077d249ba905:dfcc36a349bb4219baade50a51381b9c")
     }
   };
-
-  const req = https.request(options, (res) => {
-    console.log(`STATUS: ${res.statusCode}`);
-    console.log(`HEADERS: ${JSON.stringify(res.headers)}`);
-    res.setEncoding('utf8');
-    res.on('data', (chunk) => {
-      console.log(`BODY: ${chunk}`);
-    });
-    res.on('end', () => {
-      console.log('No more data in response.');
-    });
+  request.post(options, (error, response, body) => {
+    if (!error && response.statusCode === 200) {
+      doAllTheShit(body.access_token);
+    }
   });
-
-  req.on('error', (e) => {
-    console.error(`problem with request: ${e.message}`);
-  });
-
-  // write data to request body
-  req.write(postData);
-  req.end();
 }
 
-function btoa(s) {
-  return new Buffer(s).toString('base64');
+function encodeB64(s) {
+  return Buffer.from(s).toString("base64");
 }
-
 
 // getting the spotify link
 var args = process.argv;
 var sLink = args[2];
+var linkData = {};
+linkData["username"] = sLink.substring(sLink.indexOf("user")+5, sLink.length);
+linkData["username"] = linkData["username"].substring(0, linkData["username"].indexOf("/"));
+linkData["playlist"] = sLink.substring(sLink.indexOf("playlist")+9, sLink.length);
 
 var Gapi = "AIzaSyCb4WEODouAbNve1H0HhqrYfcnh7SGCsf8";
 console.log("click link to login to spotify");
@@ -88,10 +75,9 @@ console.log("https://accounts.spotify.com/authorize/?client_id=f7fd010eb8204b7aa
 // })
 
 function doAllTheShit(Stoken) {
-  console.log("Stoken: " + Stoken);
   https.get({
     host: "api.spotify.com",
-    path: "/v1/users/spotify/playlists/37i9dQZF1DX0wiundViT27/tracks",
+    path: "/v1/users/"+linkData.username+"/playlists/"+linkData.playlist+"/tracks",
     headers: {"Accept": "application/json", "Authorization": "Bearer "+Stoken}}, (res)=>{
       var pageData = "";
       res.setEncoding("utf-8");
@@ -99,7 +85,6 @@ function doAllTheShit(Stoken) {
         pageData += chunk;
       });
       res.on('end', ()=> {
-        console.log(pageData);
         pageData = JSON.parse(pageData);
 
         for (var i = 0; i < pageData.items.length; i++) {
