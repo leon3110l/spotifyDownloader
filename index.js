@@ -102,7 +102,7 @@ function doAllTheShit(Stoken) {
         for (var i = 0; i < pageData.items.length; i++) {
           var artistName = pageData.items[i].track.artists[0].name;
           var songName = pageData.items[i].track.name;
-          var title = songName + " - " + artistName;
+          var title = artistName + " - " + songName;
           search(artistName + " " + songName, title);
         }
 
