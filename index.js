@@ -129,13 +129,20 @@ function search(q, title) {
           if (info.items[i].snippet.title.toLowerCase().contains(termList[j])) {
             var best = i;
             break loop1;
-          } else {
-            var best = i;
           }
         }
       }
     }
+    if (!best) {
+      for (var i = 0; i < info.items.length; i++) {
+        if (info.items[i].id.kind === "youtube#video") {
+          var best = i;
+          break;
+        }
+      }
+    }
     ytData = {"title":info.items[best].snippet.title, "channelTitle":info.items[best].snippet.channelTitle, "id": info.items[best].id.videoId, "thumbnail":info.items[best].snippet.thumbnails.high};
+    console.log(best);
     console.log("https://www.youtube.com/watch?v="+colors.verbose(ytData.id));
     download("https://www.youtube.com/watch?v="+ytData.id, title);
   });
