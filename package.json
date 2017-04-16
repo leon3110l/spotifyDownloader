@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/leon-4A6C/spotifyDownloader#readme",
   "dependencies": {
+    "colors": "^1.1.2",
     "googleapis": "^19.0.0",
     "request": "^2.81.0",
     "socket.io": "^1.7.3",

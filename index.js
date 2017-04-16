@@ -4,6 +4,21 @@ var fs = require("fs");
 var https = require("https");
 var request = require("request");
 var goodList = require("./termList.json");
+var colors = require('colors/safe');
+
+// colors theme
+colors.setTheme({
+  silly: 'rainbow',
+  input: 'grey',
+  verbose: 'cyan',
+  prompt: 'grey',
+  info: 'green',
+  data: 'grey',
+  help: 'cyan',
+  warn: 'yellow',
+  debug: 'blue',
+  error: 'red'
+});
 
 
 // get the spotify token from the user
@@ -16,7 +31,7 @@ function handler(req, res) {
   fs.readFile(__dirname + "/index.html", function(err, data) {
     if (err) {
       res.writeHead(500);
-      return res.end("error loading index.html");
+      return res.end(colors.error("error loading index.html"));
     }
 
     res.writeHead(200);
@@ -67,13 +82,8 @@ linkData["username"] = linkData["username"].substring(0, linkData["username"].in
 linkData["playlist"] = sLink.substring(sLink.indexOf("playlist")+9, sLink.length);
 
 var Gapi = "AIzaSyCb4WEODouAbNve1H0HhqrYfcnh7SGCsf8";
-console.log("click link to login to spotify");
-console.log("https://accounts.spotify.com/authorize/?client_id=f7fd010eb8204b7aabe4077d249ba905&response_type=code&redirect_uri=http://localhost:8000");
-// https.get({
-//   host: "accounts.spotify.com",
-//   path: "/authorize/?client_id=f7fd010eb8204b7aabe4077d249ba905&response_type=code&redirect_uri=https%3A%2F%2Fexample.com%2Fcallback",
-//
-// })
+console.log(colors.help("click link to login to spotify"));
+console.log(colors.info("https://accounts.spotify.com/authorize/?client_id=f7fd010eb8204b7aabe4077d249ba905&response_type=code&redirect_uri=http://localhost:8000"));
 
 function doAllTheShit(Stoken) {
   https.get({
@@ -108,7 +118,7 @@ function search(q, title) {
     maxResults: 5
   }, function(error, info) {
     if (error) {
-      console.error(error);
+      console.error(colors.error(error));
     }
     loop1:
     for (var i = 0; i < info.items.length; i++) {
@@ -125,7 +135,7 @@ function search(q, title) {
       }
     }
     ytData = {"title":info.items[best].snippet.title, "channelTitle":info.items[best].snippet.channelTitle, "id": info.items[best].id.videoId, "thumbnail":info.items[best].snippet.thumbnails.high};
-    console.log("https://www.youtube.com/watch?v="+ytData.id);
+    console.log("https://www.youtube.com/watch?v="+colors.verbose(ytData.id));
     download("https://www.youtube.com/watch?v="+ytData.id, title);
   });
 }
@@ -134,15 +144,15 @@ function download(ytLink, title) {
   try {
     var dl = ytdl.exec(ytLink, ['-x', '--audio-format', 'mp3', "-o 'music/"+title+".%(ext)s'"], {}, (err, output)=>{
       if (err) {
-        console.log(err);
+        console.log(colors.warn(err));
         // if error try again
         download(ytLink, title);
       } else {
-        console.log(output.join('\n'));
+        console.log(colors.data(output.join('\n')));
       }
     });
   } catch (e) {
-    console.log(e);
+    console.log(colors.error(e));
   }
 }
 
