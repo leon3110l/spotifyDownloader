@@ -132,12 +132,17 @@ function search(q, title) {
 
 function download(ytLink, title) {
   try {
-    var dl = ytdl.exec(ytLink, ['-x', '--audio-format', 'mp3', "-o 'music/"+title+".%(ext)s'", "-i"], {}, (err, output)=>{
-      if (err) throw err;
-      console.log(output.join('\n'));
+    var dl = ytdl.exec(ytLink, ['-x', '--audio-format', 'mp3', "-o 'music/"+title+".%(ext)s'"], {}, (err, output)=>{
+      if (err) {
+        console.log(err);
+        // if error try again
+        download(ytLink, title);
+      } else {
+        console.log(output.join('\n'));
+      }
     });
   } catch (e) {
-    console.error(e);
+    console.log(e);
   }
 }
 
