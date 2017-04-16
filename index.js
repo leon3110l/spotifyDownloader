@@ -17,7 +17,8 @@ colors.setTheme({
   help: 'cyan',
   warn: 'yellow',
   debug: 'blue',
-  error: 'red'
+  error: 'red',
+  link: ["underline", "green"]
 });
 
 
@@ -83,7 +84,7 @@ linkData["playlist"] = sLink.substring(sLink.indexOf("playlist")+9, sLink.length
 
 var Gapi = "AIzaSyCb4WEODouAbNve1H0HhqrYfcnh7SGCsf8";
 console.log(colors.help("click link to login to spotify"));
-console.log(colors.info("https://accounts.spotify.com/authorize/?client_id=f7fd010eb8204b7aabe4077d249ba905&response_type=code&redirect_uri=http://localhost:8000"));
+console.log(colors.link("https://accounts.spotify.com/authorize/?client_id=f7fd010eb8204b7aabe4077d249ba905&response_type=code&redirect_uri=http://localhost:8000"));
 
 function doAllTheShit(Stoken) {
   https.get({
