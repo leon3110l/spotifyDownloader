@@ -3,7 +3,7 @@ var ytdl = require("youtube-dl");
 var fs = require("fs");
 var https = require("https");
 var request = require("request");
-var goodList = require("./termList.json");
+var termList = require("./termList.json");
 var colors = require('colors/safe');
 
 // colors theme
@@ -125,8 +125,8 @@ function search(q, title) {
     for (var i = 0; i < info.items.length; i++) {
       if (info.items[i].id.kind === 'youtube#video') {
         loop2:
-        for (var j = 0; j < goodList.length; j++) {
-          if (info.items[i].snippet.title.toLowerCase().contains(goodList[j])) {
+        for (var j = 0; j < termList.length; j++) {
+          if (info.items[i].snippet.title.toLowerCase().contains(termList[j])) {
             var best = i;
             break loop1;
           } else {
