@@ -142,7 +142,6 @@ function search(q, title) {
       }
     }
     ytData = {"title":info.items[best].snippet.title, "channelTitle":info.items[best].snippet.channelTitle, "id": info.items[best].id.videoId, "thumbnail":info.items[best].snippet.thumbnails.high};
-    console.log(best);
     console.log("https://www.youtube.com/watch?v="+colors.verbose(ytData.id));
     download("https://www.youtube.com/watch?v="+ytData.id, title);
   });
