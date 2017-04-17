@@ -3,14 +3,52 @@
   <head>
     <meta charset="utf-8">
     <title>spotify data</title>
+    <style media="screen">
+      .progressBar {
+        background: lightgreen;
+        width: 0;
+        height: 100%;
+        z-index: -1;
+        overflow: hidden;
+        position: absolute;
+        top: 0;
+        left: 0;
+      }
+      .progressBarWrapper {
+        width: 100%;
+        background: lightblue;
+        text-align: center;
+        z-index: -2;
+        overflow: hidden;
+        position: relative;
+      }
+      .percentage {
+        color: white;
+        font-size: 4rem
+      }
+    </style>
   </head>
   <body>
     <h1>your downloads have started in the terminal</h1>
-    <p>if there are no .part files in the 'music folder, you can stop the programm by pressing CTRL+C in the terminal</p>
+    <p>if the download is done you can stop the program by pressing CTRL+C in the terminal</p>
+
+    <div class="progressBarWrapper">
+      <h1 class="percentage">0%</h1>
+      <div class="progressBar"></div>
+    </div>
+
+
     <script src="http://cdnjs.cloudflare.com/ajax/libs/socket.io/1.7.3/socket.io.min.js" charset="utf-8"></script>
     <script type="text/javascript">
       var socket = io("http://localhost:8000");
       socket.emit("token", getParams());
+
+
+      socket.on("progress", function(percentage) {
+        document.getElementsByClassName("percentage")[0].innerHTML = percentage+"%";
+        document.getElementsByClassName("progressBar")[0].style.width = percentage+"%";
+      });
+
 
       function getParams() {
         var params = window.location.search.substring(1);

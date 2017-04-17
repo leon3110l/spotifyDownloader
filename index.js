@@ -8,6 +8,12 @@ var termList = require("./termList.json");
 var colors = require('colors/safe');
 var ffmetadata = require("ffmetadata");
 
+// global data
+var amountOfSongs;
+var amountOfSongsDone = 0;
+var percentage;
+
+
 // colors theme
 colors.setTheme({
   silly: 'rainbow',
@@ -101,6 +107,8 @@ function doAllTheShit(Stoken) {
       res.on('end', ()=> {
         pageData = JSON.parse(pageData);
 
+        amountOfSongs = pageData.total;
+
         for (var i = 0; i < pageData.items.length; i++) {
           var spotifyData = {
             "cover": pageData.items[i].track.album.images[0].url,
@@ -151,7 +159,6 @@ function search(spotifyData) {
     var filename = spotifyData.artistName +" - "+ spotifyData.songName
     // if callback then done downloading
     download("https://www.youtube.com/watch?v="+ytData.id, filename, function(filename) {
-      // TODO: calculate percentage and output to website
 
       // add metadata to file
       var metadata = {
@@ -171,6 +178,12 @@ function search(spotifyData) {
           } else {
             console.log(colors.info("metadata written"));
             fs.unlinkSync(file);
+
+            // calculates and sends back percentage
+            amountOfSongsDone++;
+            percentage = amountOfSongsDone/amountOfSongs*100;
+
+            io.emit("progress", percentage);
           }
         });
       });
