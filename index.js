@@ -1,3 +1,4 @@
+// all the dependencies
 var yt = require('googleapis').youtube('v3');
 var ytdl = require("youtube-dl");
 var fs = require("fs");
@@ -5,6 +6,7 @@ var https = require("https");
 var request = require("request");
 var termList = require("./termList.json");
 var colors = require('colors/safe');
+var ffmetadata = require("ffmetadata");
 
 // colors theme
 colors.setTheme({
@@ -100,22 +102,24 @@ function doAllTheShit(Stoken) {
         pageData = JSON.parse(pageData);
 
         for (var i = 0; i < pageData.items.length; i++) {
-          var artistName = pageData.items[i].track.artists[0].name;
-          var songName = pageData.items[i].track.name;
-          var title = artistName + " - " + songName;
-          search(artistName + " " + songName, title);
+          var spotifyData = {
+            "cover": pageData.items[i].track.album.images[0].url,
+            "songName": pageData.items[i].track.name,
+            "artistName": pageData.items[i].track.artists[0].name
+          };
+          search(spotifyData);
         }
 
       });
     });
 }
 
-function search(q, title) {
+function search(spotifyData) {
   var ytData;
   yt.search.list({
     auth: Gapi,
     part: "snippet",
-    q: q,
+    q: spotifyData.artistName +" "+ spotifyData.songName,
     maxResults: 5
   }, function(error, info) {
     if (error) {
@@ -143,19 +147,59 @@ function search(q, title) {
     }
     ytData = {"title":info.items[best].snippet.title, "channelTitle":info.items[best].snippet.channelTitle, "id": info.items[best].id.videoId, "thumbnail":info.items[best].snippet.thumbnails.high};
     console.log("https://www.youtube.com/watch?v="+colors.verbose(ytData.id));
-    download("https://www.youtube.com/watch?v="+ytData.id, title);
+
+    var filename = spotifyData.artistName +" - "+ spotifyData.songName
+    // if callback then done downloading
+    download("https://www.youtube.com/watch?v="+ytData.id, filename, function(filename) {
+      // TODO: calculate percentage and output to website
+
+      // add metadata to file
+      var metadata = {
+        "artist": spotifyData.artistName,
+        "title": spotifyData.songName
+      };
+      downloadImg(spotifyData.cover, spotifyData.artistName + " - " + spotifyData.songName, function(file){
+        console.log(colors.info('done downloading mp3 cover'));
+        console.log(file);
+        var cover = {
+          'attachments': [file]
+        };
+        console.log(cover);
+        ffmetadata.write(filename, metadata, cover, function(err) {
+          if (err) {
+            console.log(colors.error("Error writing metadata"), err);
+          } else {
+            console.log(colors.info("metadata written"));
+            fs.unlinkSync(file);
+          }
+        });
+      });
+    });
   });
 }
 
-function download(ytLink, title) {
+function downloadImg(uri, filename, callback){
+  request.head(uri, function(err, res, body){
+    // console.log('content-type:', res.headers['content-type']);
+    var ext = "."+res.headers['content-type'].substring("image/".length, res.headers['content-type'].length);
+    // console.log('content-length:', res.headers['content-length']);
+    filename = __dirname+"/ 'music/"+filename+ext;
+    request(uri).pipe(fs.createWriteStream(filename)).on('close', function() {
+      callback(filename);
+    });
+  });
+};
+
+function download(ytLink, title, callback) {
   try {
     var dl = ytdl.exec(ytLink, ['-x', '--audio-format', 'mp3', "-o 'music/"+title+".%(ext)s'"], {}, (err, output)=>{
       if (err) {
         console.log(colors.warn(err));
         // if error try again
-        download(ytLink, title);
+        download(ytLink, title, callback);
       } else {
         console.log(colors.data(output.join('\n')));
+        callback(" 'music/"+title+".mp3");
       }
     });
   } catch (e) {
