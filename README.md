@@ -1,5 +1,5 @@
 # spotifyDownloader
-downloads an spotify playlist
+downloads a spotify playlist
 
 ## installation
 
