@@ -73,7 +73,7 @@ function getToken(code) {
   };
   request.post(options, (error, response, body) => {
     if (!error && response.statusCode === 200) {
-      doAllTheShit(body.access_token);
+      getTracks(body.access_token);
     }
   });
 }
@@ -94,7 +94,8 @@ var Gapi = "AIzaSyCb4WEODouAbNve1H0HhqrYfcnh7SGCsf8";
 console.log(colors.help("click link to login to spotify"));
 console.log(colors.link("https://accounts.spotify.com/authorize/?client_id=f7fd010eb8204b7aabe4077d249ba905&response_type=code&redirect_uri=http://localhost:8000"));
 
-function doAllTheShit(Stoken) {
+function getTracks(Stoken) {
+  var spotifyData = [];
   https.get({
     host: "api.spotify.com",
     path: "/v1/users/"+linkData.username+"/playlists/"+linkData.playlist+"/tracks",
@@ -108,18 +109,43 @@ function doAllTheShit(Stoken) {
         pageData = JSON.parse(pageData);
 
         amountOfSongs = pageData.total;
-
         for (var i = 0; i < pageData.items.length; i++) {
-          var spotifyData = {
+          spotifyData.push({
             "cover": pageData.items[i].track.album.images[0].url,
             "songName": pageData.items[i].track.name,
             "artistName": pageData.items[i].track.artists[0].name
-          };
-          search(spotifyData);
+          });
+          if (pageData.items[i].track.album.album_type === "album") {
+            spotifyData[i]["album"] = pageData.items[i].track.album.name;
+          } else {
+            spotifyData[i]["album"] = spotifyData[i].songName;
+          }
+          console.log(spotifyData[i].songName);
+          getArtistGenre(pageData.items[i].track.artists[0].href, Stoken, i, function(data, i) {
+            console.log(spotifyData, i);
+            spotifyData[i]["genre"] = data.genres[0];
+            search(spotifyData[i]);
+          });
         }
-
       });
     });
+}
+
+function getArtistGenre(href, Stoken, i, callback) {
+  var options = {
+    url: href,
+    method: "GET",
+    headers: {
+      "Accept": "application/json",
+      "Authorization": "Bearer "+Stoken
+    }
+  };
+  request.get(options, function (error, response, body) {
+    if (!error && response.statusCode === 200) {
+      var data = JSON.parse(body);
+      callback(data, i);
+    }
+  });
 }
 
 function search(spotifyData) {
@@ -163,7 +189,9 @@ function search(spotifyData) {
       // add metadata to file
       var metadata = {
         "artist": spotifyData.artistName,
-        "title": spotifyData.songName
+        "title": spotifyData.songName,
+        "album": spotifyData.album,
+        "genre": spotifyData.genre
       };
       downloadImg(spotifyData.cover, spotifyData.artistName + " - " + spotifyData.songName, function(file){
         console.log(colors.info('done downloading mp3 cover'));
@@ -175,11 +203,12 @@ function search(spotifyData) {
         ffmetadata.write(filename, metadata, cover, function(err) {
           if (err) {
             console.log(colors.error("Error writing metadata"), err);
+            downloadImg(spotifyData.cover, spotifyData.artistName + " - " + spotifyData.songName, this(file)); // not sure if this works
           } else {
             console.log(colors.info("metadata written"));
             fs.unlinkSync(file);
 
-            // calculates and sends back percentage
+            // calculates and sends back percentage to the browser
             amountOfSongsDone++;
             percentage = amountOfSongsDone/amountOfSongs*100;
 

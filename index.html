@@ -45,6 +45,7 @@
 
 
       socket.on("progress", function(percentage) {
+        percentage = Math.round(percentage);
         document.getElementsByClassName("percentage")[0].innerHTML = percentage+"%";
         document.getElementsByClassName("progressBar")[0].style.width = percentage+"%";
       });
