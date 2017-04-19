@@ -120,9 +120,7 @@ function getTracks(Stoken) {
           } else {
             spotifyData[i]["album"] = spotifyData[i].songName;
           }
-          console.log(spotifyData[i].songName);
           getArtistGenre(pageData.items[i].track.artists[0].href, Stoken, i, function(data, i) {
-            console.log(spotifyData, i);
             spotifyData[i]["genre"] = data.genres[0];
             search(spotifyData[i]);
           });
