@@ -121,7 +121,11 @@ function getTracks(Stoken) {
             spotifyData[i]["album"] = spotifyData[i].songName;
           }
           getArtistGenre(pageData.items[i].track.artists[0].href, Stoken, i, function(data, i) {
-            spotifyData[i]["genre"] = data.genres[0];
+            if (data.genres[0]) {
+              spotifyData[i]["genre"] = data.genres[0];
+            } else {
+              spotifyData[i]["genre"] = "";
+            }
             search(spotifyData[i]);
           });
         }
@@ -193,11 +197,9 @@ function search(spotifyData) {
       };
       downloadImg(spotifyData.cover, spotifyData.artistName + " - " + spotifyData.songName, function(file){
         console.log(colors.info('done downloading mp3 cover'));
-        console.log(file);
         var cover = {
           'attachments': [file]
         };
-        console.log(cover);
         ffmetadata.write(filename, metadata, cover, function(err) {
           if (err) {
             console.log(colors.error("Error writing metadata"), err);
