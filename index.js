@@ -170,6 +170,7 @@ function spotifyCallback(res, code, err) {
                   io.emit("progress", percentage);
                   if (percentage == 100) {
                     console.log(colors.info("DONE downloading all files"));
+                    app.close();
                     fs.emptyDir(__dirname+'/covers', (err)=>{
                       if (err) {
                         console.log(colors.error("couldn't delete cover folder"));
