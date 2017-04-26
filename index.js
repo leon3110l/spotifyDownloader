@@ -80,7 +80,7 @@ var totalSongs = 0;
 var totalDownloaded = 0;
 function spotifyCallback(res, code, err) {
   if (code == "playlistTracks") {
-    totalSongs += res.total;
+    totalSongs = res.total;
     if (res.next) {
       spotify.getPlaylistTracks(linkData["playlist"], linkData["username"], {offset:res.offset+100, limit:100});
     }
@@ -183,7 +183,7 @@ function spotifyCallback(res, code, err) {
                   if (percentage == 100) {
                     console.log(colors.info("DONE downloading all files"));
                     app.close();
-                    fs.emptyDir(__dirname+'/covers', (err)=>{
+                    fs.remove(__dirname+'/covers', (err)=>{
                       if (err) {
                         console.log(colors.error("couldn't delete cover folder"));
                       }
