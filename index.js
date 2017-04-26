@@ -1,19 +1,12 @@
 // all the dependencies
 var yt = require('googleapis').youtube('v3');
+var ytApi = "AIzaSyCb4WEODouAbNve1H0HhqrYfcnh7SGCsf8";
 var ytdl = require("youtube-dl");
-var fs = require("fs");
+var fs = require("fs-extra");
 var https = require("https");
 var request = require("request");
 var termList = require("./termList.json");
 var colors = require('colors/safe');
-var ffmetadata = require("ffmetadata");
-
-// global data
-var amountOfSongs;
-var amountOfSongsDone = 0;
-var percentage;
-
-
 // colors theme
 colors.setTheme({
   silly: 'rainbow',
@@ -28,6 +21,16 @@ colors.setTheme({
   error: 'red',
   link: ["underline", "green"]
 });
+var ffmetadata = require("ffmetadata");
+
+String.prototype.contains = function(p) {
+  return (this.indexOf(p) > -1);
+}
+
+var spotify = new spotifyApi("f7fd010eb8204b7aabe4077d249ba905", "dfcc36a349bb4219baade50a51381b9c", spotifyCallback);
+
+// checks if directory covers exists and if not it will make it
+fs.existsSync("covers") || fs.mkdirSync("covers");
 
 
 // get the spotify token from the user
@@ -51,15 +54,177 @@ function handler(req, res) {
 
 io.on("connection", function (socket) {
   socket.on("token", function(data) {
-    getToken(data.code);
+    spotify.oauthCode = data.code;
+    spotify.getToken();
   });
 });
 
+console.log(colors.help("click link to login to spotify"));
+console.log(colors.link("https://accounts.spotify.com/authorize/?client_id="+spotify.client_id+"&response_type=code&redirect_uri=http://localhost:8000"));
 
-function getToken(code) {
+// getting the spotify link
+var args = process.argv;
+var sLink = args[2];
+var linkData = {};
+if (sLink.contains("playlist")) {
+  linkData["username"] = sLink.substring(sLink.indexOf("user")+5, sLink.length);
+  linkData["username"] = linkData["username"].substring(0, linkData["username"].indexOf("/"));
+  linkData["playlist"] = sLink.substring(sLink.indexOf("playlist")+9, sLink.length);
+} else if (sLink.contains("album")) {
+  // TODO: get album info
+}
+
+var spotifyData = [];
+var totalSongs;
+var totalDownloaded = 0;
+function spotifyCallback(res, code, err) {
+  if (code == "playlistTracks") {
+    totalSongs = res.total;
+    for (var i = 0; i < res.items.length; i++) {
+      spotifyData.push({
+        "i": i,
+        "artist": res.items[i].track.artists[0].name,
+        "song": res.items[i].track.name,
+        "album": res.items[i].track.album.name,
+        "cover": res.items[i].track.album.images[0].url,
+        "id": res.items[0].track.artists[0].id
+      });
+      spotify.getArtist(res.items[0].track.artists[0].id);
+    }
+  } else if (code == "token") {
+    if (linkData.playlist) {
+      spotify.getPlaylistTracks(linkData["playlist"], linkData["username"]);
+    } else if(linkData.album) {
+      // TODO: add album function
+    }
+  } else if (code == "artist") {
+    for (var i = 0; i < spotifyData.length; i++) {
+      if (spotifyData[i].id === res.id && !spotifyData[i].genre) {
+        spotifyData[i]["genre"] = res.genres[0];
+        // do a yt search
+        ytSearch(spotifyData[i].artist+" - "+spotifyData[i].song, 5, ytApi, (result, i)=>{
+          var best = null;
+          loop1:
+          for (var j = 0; j < result.items.length; j++) {
+            if (result.items[j].id.kind === 'youtube#video') {
+              loop2:
+              for (var k = 0; k < termList.length; k++) {
+                if (result.items[j].snippet.title.toLowerCase().contains(termList[k])) {
+                  var best = j;
+                  break loop1;
+                }
+              }
+            }
+          }
+          if (!best) {
+            for (var j = 0; j < result.items.length; j++) {
+              if (result.items[j].id.kind === "youtube#video") {
+                var best = j;
+                break;
+              }
+            }
+          }
+          console.log("https://www.youtube.com/watch?v="+colors.verbose(result.items[best].id.videoId));
+          // download youtube mp3
+          var title = spotifyData[i].artist+" - "+spotifyData[i].song;
+          console.log(colors.verbose(title));
+          downloadMp3("https://www.youtube.com/watch?v="+result.items[best].id.videoId, __dirname+"/music/"+title, (error, stdout, stderr, path)=> {
+            console.log(colors.info(title+" downloaded"));
+            //download cover
+            downloadImg(spotifyData[i].cover, __dirname+"/covers/"+title, (dir) => {
+              console.log(colors.info("downloaded cover"));
+              var options = {
+                "attachments": [dir]
+              };
+              var metadata = {
+                "artist": spotifyData[i].artist,
+                "album": spotifyData[i].album,
+                "title": spotifyData[i].song,
+                "genre": spotifyData[i].genre
+              }
+              ffmetadata.write(path, metadata, options, (err)=> {
+                if (err) {
+                  console.log(colors.error("error writing metadata"));
+                } else {
+                  console.log(colors.info("wrote metadata successfully"));
+                  totalDownloaded++;
+                  var percentage = totalDownloaded/totalSongs*100;
+                  io.emit("progress", percentage);
+                  if (percentage == 100) {
+                    console.log(colors.info("DONE downloading all files"));
+                    fs.emptyDir(__dirname+'/covers', (err)=>{
+                      if (err) {
+                        console.log(colors.error("couldn't delete cover folder"));
+                      }
+                    });
+                  }
+                }
+              });
+            });
+          });
+        }, i);
+      }
+    }
+  }
+}
+
+//path includes filename but excludes extension
+function downloadMp3(ytLink, path, callback) {
+  var exec = require("child_process").exec;
+  var cmd = 'youtube-dl -x --audio-format mp3 -o "'+path+'.%(ext)s" '+ytLink;
+  exec(cmd, (error, stdout, stderr)=> {
+    if (!error && !stderr) {
+      callback(error, stdout, stderr, path+".mp3");
+    } else {
+      // brute force it
+      console.log(error);
+      console.log(stderr);
+      downloadMp3(ytLink, path, callback);
+    }
+  });
+}
+
+function ytSearch(searchTerm, maxResults, apiKey, callback, i) {
+  yt.search.list({
+    part: "snippet",
+    q: searchTerm,
+    maxResults: maxResults,
+    auth: apiKey
+  }, (err, result)=>{
+    callback(result, i);
+    return result;
+  });
+}
+
+// do not give dir an extension like .jpeg, gif or what ever, you can give it an name afterwards but no extension
+function downloadImg(url, dir, callback){
+  request.head(url, function(err, res, body){
+    var ext = "."+res.headers['content-type'].substring("image/".length, res.headers['content-type'].length);
+    dir+= ext;
+    request(url).pipe(fs.createWriteStream(dir)).on('close', function() {
+      callback(dir);
+    });
+  });
+}
+
+
+
+
+
+// spotifyApi object
+
+function spotifyApi(client_id, client_secret, callback) {
+  this.client_id = client_id;
+  this.client_secret = client_secret;
+  this.token;
+  this.oauthCode;
+  this.callback = callback;
+}
+
+spotifyApi.prototype.getToken = function() {
   var data = {
     'grant_type': "authorization_code",
-    'code': code,
+    'code': this.oauthCode,
     'redirect_uri': "http://localhost:8000"
   }
   var options = {
@@ -73,182 +238,48 @@ function getToken(code) {
   };
   request.post(options, (error, response, body) => {
     if (!error && response.statusCode === 200) {
-      getTracks(body.access_token);
+      this.token = body.access_token;
+      this.callback(this.token, "token");
+      return this.token;
     }
   });
 }
-
 function encodeB64(s) {
   return Buffer.from(s).toString("base64");
 }
 
-// getting the spotify link
-var args = process.argv;
-var sLink = args[2];
-var linkData = {};
-linkData["username"] = sLink.substring(sLink.indexOf("user")+5, sLink.length);
-linkData["username"] = linkData["username"].substring(0, linkData["username"].indexOf("/"));
-linkData["playlist"] = sLink.substring(sLink.indexOf("playlist")+9, sLink.length);
-
-var Gapi = "AIzaSyCb4WEODouAbNve1H0HhqrYfcnh7SGCsf8";
-console.log(colors.help("click link to login to spotify"));
-console.log(colors.link("https://accounts.spotify.com/authorize/?client_id=f7fd010eb8204b7aabe4077d249ba905&response_type=code&redirect_uri=http://localhost:8000"));
-
-function getTracks(Stoken) {
-  var spotifyData = [];
+spotifyApi.prototype.getPlaylistTracks = function(playlistId, username) {
   https.get({
     host: "api.spotify.com",
-    path: "/v1/users/"+linkData.username+"/playlists/"+linkData.playlist+"/tracks",
-    headers: {"Accept": "application/json", "Authorization": "Bearer "+Stoken}}, (res)=>{
+    path: "/v1/users/"+username+"/playlists/"+playlistId+"/tracks",
+    headers: {"Accept": "application/json", "Authorization": "Bearer "+this.token}}, (res)=>{
       var pageData = "";
       res.setEncoding("utf-8");
       res.on('data', (chunk)=> {
         pageData += chunk;
       });
       res.on('end', ()=> {
-        pageData = JSON.parse(pageData);
-
-        amountOfSongs = pageData.total;
-        for (var i = 0; i < pageData.items.length; i++) {
-          spotifyData.push({
-            "cover": pageData.items[i].track.album.images[0].url,
-            "songName": pageData.items[i].track.name,
-            "artistName": pageData.items[i].track.artists[0].name
-          });
-          if (pageData.items[i].track.album.album_type === "album") {
-            spotifyData[i]["album"] = pageData.items[i].track.album.name;
-          } else {
-            spotifyData[i]["album"] = spotifyData[i].songName;
-          }
-          getArtistGenre(pageData.items[i].track.artists[0].href, Stoken, i, function(data, i) {
-            if (data.genres[0]) {
-              spotifyData[i]["genre"] = data.genres[0];
-            } else {
-              spotifyData[i]["genre"] = "";
-            }
-            search(spotifyData[i]);
-          });
-        }
+        this.callback(JSON.parse(pageData), "playlistTracks");
+        return JSON.parse(pageData);
       });
-    });
+    }
+  );
 }
 
-function getArtistGenre(href, Stoken, i, callback) {
-  var options = {
-    url: href,
-    method: "GET",
-    headers: {
-      "Accept": "application/json",
-      "Authorization": "Bearer "+Stoken
-    }
-  };
-  request.get(options, function (error, response, body) {
-    if (!error && response.statusCode === 200) {
-      var data = JSON.parse(body);
-      callback(data, i);
-    }
-  });
-}
-
-function search(spotifyData) {
-  var ytData;
-  yt.search.list({
-    auth: Gapi,
-    part: "snippet",
-    q: spotifyData.artistName +" "+ spotifyData.songName,
-    maxResults: 5
-  }, function(error, info) {
-    if (error) {
-      console.error(colors.error(error));
-    }
-    loop1:
-    for (var i = 0; i < info.items.length; i++) {
-      if (info.items[i].id.kind === 'youtube#video') {
-        loop2:
-        for (var j = 0; j < termList.length; j++) {
-          if (info.items[i].snippet.title.toLowerCase().contains(termList[j])) {
-            var best = i;
-            break loop1;
-          }
-        }
-      }
-    }
-    if (!best) {
-      for (var i = 0; i < info.items.length; i++) {
-        if (info.items[i].id.kind === "youtube#video") {
-          var best = i;
-          break;
-        }
-      }
-    }
-    ytData = {"title":info.items[best].snippet.title, "channelTitle":info.items[best].snippet.channelTitle, "id": info.items[best].id.videoId, "thumbnail":info.items[best].snippet.thumbnails.high};
-    console.log("https://www.youtube.com/watch?v="+colors.verbose(ytData.id));
-
-    var filename = spotifyData.artistName +" - "+ spotifyData.songName
-    // if callback then done downloading
-    download("https://www.youtube.com/watch?v="+ytData.id, filename, function(filename) {
-
-      // add metadata to file
-      var metadata = {
-        "artist": spotifyData.artistName,
-        "title": spotifyData.songName,
-        "album": spotifyData.album,
-        "genre": spotifyData.genre
-      };
-      downloadImg(spotifyData.cover, spotifyData.artistName + " - " + spotifyData.songName, function(file){
-        console.log(colors.info('done downloading mp3 cover'));
-        var cover = {
-          'attachments': [file]
-        };
-        ffmetadata.write(filename, metadata, cover, function(err) {
-          if (err) {
-            console.log(colors.error("Error writing metadata"), err);
-            downloadImg(spotifyData.cover, spotifyData.artistName + " - " + spotifyData.songName, this(file)); // not sure if this works
-          } else {
-            console.log(colors.info("metadata written"));
-            fs.unlinkSync(file);
-
-            // calculates and sends back percentage to the browser
-            amountOfSongsDone++;
-            percentage = amountOfSongsDone/amountOfSongs*100;
-
-            io.emit("progress", percentage);
-          }
-        });
+spotifyApi.prototype.getArtist = function(artistId) {
+  https.get({
+    host: "api.spotify.com",
+    path: "/v1/artists/"+artistId,
+    headers: {"Accept": "application/json", "Authorization": "Bearer "+this.token}}, (res)=>{
+      var pageData = "";
+      res.setEncoding("utf-8");
+      res.on('data', (chunk)=> {
+        pageData += chunk;
       });
-    });
-  });
-}
-
-function downloadImg(uri, filename, callback){
-  request.head(uri, function(err, res, body){
-    // console.log('content-type:', res.headers['content-type']);
-    var ext = "."+res.headers['content-type'].substring("image/".length, res.headers['content-type'].length);
-    // console.log('content-length:', res.headers['content-length']);
-    filename = __dirname+"/ 'music/"+filename+ext;
-    request(uri).pipe(fs.createWriteStream(filename)).on('close', function() {
-      callback(filename);
-    });
-  });
-};
-
-function download(ytLink, title, callback) {
-  try {
-    var dl = ytdl.exec(ytLink, ['-x', '--audio-format', 'mp3', "-o 'music/"+title+".%(ext)s'"], {}, (err, output)=>{
-      if (err) {
-        console.log(colors.warn(err));
-        // if error try again
-        download(ytLink, title, callback);
-      } else {
-        console.log(colors.data(output.join('\n')));
-        callback(" 'music/"+title+".mp3");
-      }
-    });
-  } catch (e) {
-    console.log(colors.error(e));
-  }
-}
-
-String.prototype.contains = function(p) {
-  return (this.indexOf(p) > -1);
+      res.on('end', ()=> {
+        this.callback(JSON.parse(pageData), "artist");
+        return JSON.parse(pageData);
+      });
+    }
+  );
 }

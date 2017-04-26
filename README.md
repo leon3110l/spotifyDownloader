@@ -16,6 +16,6 @@ npm install
 ## usage
 
 ```bash
-node index.js <spotify web player link: https://play.spotify.com>
+node index.js <spotify web player link: https://open.spotify.com>
 ```
-it will download all the songs in the 'music folder
+it will download all the songs in the music folder
