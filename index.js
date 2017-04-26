@@ -1,7 +1,6 @@
 // all the dependencies
 var yt = require('googleapis').youtube('v3');
 var ytApi = "AIzaSyCb4WEODouAbNve1H0HhqrYfcnh7SGCsf8";
-var ytdl = require("youtube-dl");
 var fs = require("fs-extra");
 var https = require("https");
 var request = require("request");
