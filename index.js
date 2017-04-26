@@ -70,7 +70,7 @@ if (sLink.contains("playlist")) {
   linkData["username"] = linkData["username"].substring(0, linkData["username"].indexOf("/"));
   linkData["playlist"] = sLink.substring(sLink.indexOf("playlist")+9, sLink.length);
 } else if (sLink.contains("album")) {
-  // TODO: get album info
+  linkData["album"] = sLink.substring(sLink.indexOf("album")+6, sLink.length);
 }
 
 var spotifyData = [];
@@ -86,15 +86,32 @@ function spotifyCallback(res, code, err) {
         "song": res.items[i].track.name,
         "album": res.items[i].track.album.name,
         "cover": res.items[i].track.album.images[0].url,
-        "id": res.items[0].track.artists[0].id
+        "id": res.items[0].track.artists[0].id,
+        "track": null,
+        "date": null
       });
-      spotify.getArtist(res.items[0].track.artists[0].id);
+      spotify.getArtist(spotifyData[i].id);
+    }
+  } else if(code == "albumTracks") {
+    totalSongs = res.tracks.total;
+    for (var i = 0; i < res.tracks.items.length; i++) {
+      spotifyData.push({
+        "i": i,
+        "artist": res.artists[0].name,
+        "song": res.tracks.items[i].name,
+        "track": res.tracks.items[i].track_number+"/"+totalSongs,
+        "album": res.name,
+        "date": res.release_date,
+        "cover": res.images[0].url,
+        "id": res.artists[0].id
+      });
+      spotify.getArtist(spotifyData[i].id);
     }
   } else if (code == "token") {
     if (linkData.playlist) {
       spotify.getPlaylistTracks(linkData["playlist"], linkData["username"]);
     } else if(linkData.album) {
-      // TODO: add album function
+      spotify.getAlbum(linkData["album"]);
     }
   } else if (code == "artist") {
     for (var i = 0; i < spotifyData.length; i++) {
@@ -139,7 +156,9 @@ function spotifyCallback(res, code, err) {
                 "artist": spotifyData[i].artist,
                 "album": spotifyData[i].album,
                 "title": spotifyData[i].song,
-                "genre": spotifyData[i].genre
+                "genre": spotifyData[i].genre,
+                "track": spotifyData[i].track,
+                "date": spotifyData[i].date
               }
               ffmetadata.write(path, metadata, options, (err)=> {
                 if (err) {
@@ -277,6 +296,24 @@ spotifyApi.prototype.getArtist = function(artistId) {
       });
       res.on('end', ()=> {
         this.callback(JSON.parse(pageData), "artist");
+        return JSON.parse(pageData);
+      });
+    }
+  );
+}
+
+spotifyApi.prototype.getAlbum = function(albumId) {
+  https.get({
+    host: "api.spotify.com",
+    path: "/v1/albums/"+albumId,
+    headers: {"Accept": "application/json", "Authorization": "Bearer "+this.token}}, (res)=>{
+      var pageData = "";
+      res.setEncoding("utf-8");
+      res.on('data', (chunk)=> {
+        pageData += chunk;
+      });
+      res.on('end', ()=> {
+        this.callback(JSON.parse(pageData), "albumTracks");
         return JSON.parse(pageData);
       });
     }
