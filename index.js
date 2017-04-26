@@ -118,11 +118,14 @@ function spotifyCallback(res, code, err) {
     }
   } else if (code == "artist") {
     for (var i = 0; i < spotifyData.length; i++) {
-      if (spotifyData[i].id === res.id && !spotifyData[i].genre) {
-        spotifyData[i]["genre"] = res.genres[0];
+      if (spotifyData[i].id === res.id && spotifyData[i].genre === undefined) {
+        if (res.genres[0] != undefined) {
+          spotifyData[i]["genre"] = res.genres[0];
+        } else {
+          spotifyData[i]["genre"] = "";
+        }
         // do a yt search
         ytSearch(spotifyData[i].artist+" - "+spotifyData[i].song, 5, ytApi, (result, i)=>{
-          var best = null;
           loop1:
           for (var j = 0; j < result.items.length; j++) {
             if (result.items[j].id.kind === 'youtube#video') {
