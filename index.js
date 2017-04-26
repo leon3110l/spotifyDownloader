@@ -82,10 +82,8 @@ function spotifyCallback(res, code, err) {
   if (code == "playlistTracks") {
     totalSongs += res.total;
     if (res.next) {
-      console.log("next!");
       spotify.getPlaylistTracks(linkData["playlist"], linkData["username"], {offset:res.offset+100, limit:100});
     }
-    console.log(res.items.length);
     for (var i = 0; i < res.items.length; i++) {
       spotifyData.push({
         "artist": res.items[i].track.artists[0].name,
