@@ -79,24 +79,27 @@ var totalDownloaded = 0;
 function spotifyCallback(res, code, err) {
   if (code == "playlistTracks") {
     totalSongs = res.total;
+    if (res.next) {
+      console.log("next!");
+      spotify.getPlaylistTracks(linkData["playlist"], linkData["username"], {offset:res.offset+100, limit:100});
+    }
+    console.log(res.items.length);
     for (var i = 0; i < res.items.length; i++) {
       spotifyData.push({
-        "i": i,
         "artist": res.items[i].track.artists[0].name,
         "song": res.items[i].track.name,
         "album": res.items[i].track.album.name,
         "cover": res.items[i].track.album.images[0].url,
-        "id": res.items[0].track.artists[0].id,
+        "id": res.items[i].track.artists[0].id,
         "track": null,
         "date": null
       });
-      spotify.getArtist(spotifyData[i].id);
+      spotify.getArtist(spotifyData[i+res.offset].id);
     }
   } else if(code == "albumTracks") {
     totalSongs = res.tracks.total;
     for (var i = 0; i < res.tracks.items.length; i++) {
       spotifyData.push({
-        "i": i,
         "artist": res.artists[0].name,
         "song": res.tracks.items[i].name,
         "track": res.tracks.items[i].track_number+"/"+totalSongs,
@@ -267,10 +270,10 @@ function encodeB64(s) {
   return Buffer.from(s).toString("base64");
 }
 
-spotifyApi.prototype.getPlaylistTracks = function(playlistId, username) {
+spotifyApi.prototype.getPlaylistTracks = function(playlistId, username, options) {
   https.get({
     host: "api.spotify.com",
-    path: "/v1/users/"+username+"/playlists/"+playlistId+"/tracks",
+    path: "/v1/users/"+username+"/playlists/"+playlistId+"/tracks"+optionsToUriParams(options),
     headers: {"Accept": "application/json", "Authorization": "Bearer "+this.token}}, (res)=>{
       var pageData = "";
       res.setEncoding("utf-8");
@@ -285,10 +288,10 @@ spotifyApi.prototype.getPlaylistTracks = function(playlistId, username) {
   );
 }
 
-spotifyApi.prototype.getArtist = function(artistId) {
+spotifyApi.prototype.getArtist = function(artistId, options) {
   https.get({
     host: "api.spotify.com",
-    path: "/v1/artists/"+artistId,
+    path: "/v1/artists/"+artistId+optionsToUriParams(options),
     headers: {"Accept": "application/json", "Authorization": "Bearer "+this.token}}, (res)=>{
       var pageData = "";
       res.setEncoding("utf-8");
@@ -303,10 +306,10 @@ spotifyApi.prototype.getArtist = function(artistId) {
   );
 }
 
-spotifyApi.prototype.getAlbum = function(albumId) {
+spotifyApi.prototype.getAlbum = function(albumId, options) {
   https.get({
     host: "api.spotify.com",
-    path: "/v1/albums/"+albumId,
+    path: "/v1/albums/"+albumId+optionsToUriParams(options),
     headers: {"Accept": "application/json", "Authorization": "Bearer "+this.token}}, (res)=>{
       var pageData = "";
       res.setEncoding("utf-8");
@@ -319,4 +322,23 @@ spotifyApi.prototype.getAlbum = function(albumId) {
       });
     }
   );
+}
+
+function optionsToUriParams(options) {
+  if (!options) {
+    return ""
+  }
+  var uri = "?";
+  var counter = 0
+  for (var x in options) {
+    if (options.hasOwnProperty(x)) {
+      if (counter == 0) {
+        uri += x+"="+options[x];
+      } else {
+        uri += "&"+x+"="+options[x];
+      }
+      counter++;
+    }
+  }
+  return uri
 }
