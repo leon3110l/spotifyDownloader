@@ -101,18 +101,26 @@ function spotifyCallback(res, code, err) {
       spotify.getAlbum(res.items[i].id);
     }
   } else if(code == "albumTracks") {
-    totalSongs += res.tracks.total;
     for (var i = 0; i < res.tracks.items.length; i++) {
-      spotifyData.push({
-        "artist": res.artists[0].name,
-        "song": res.tracks.items[i].name,
-        "track": res.tracks.items[i].track_number+"/"+res.tracks.total,
-        "album": res.name,
-        "date": res.release_date,
-        "cover": res.images[0].url,
-        "id": res.artists[0].id
-      });
-      spotify.getArtist(spotifyData[i].id);
+      var found = false;
+      for (var j = 0; j < spotifyData.length; j++) {
+        if (spotifyData[j].id == res.artists[0].id && spotifyData[j].song == res.tracks.items[i].name) {
+          found = true;
+        }
+      }
+      if (!found) {
+        spotifyData.push({
+          "artist": res.artists[0].name,
+          "song": res.tracks.items[i].name,
+          "track": res.tracks.items[i].track_number+"/"+res.tracks.total,
+          "album": res.name,
+          "date": res.release_date,
+          "cover": res.images[0].url,
+          "id": res.artists[0].id
+        });
+        totalSongs++;
+        spotify.getArtist(spotifyData[i].id);
+      }
     }
   } else if (code == "token") {
     if (linkData.playlist) {
