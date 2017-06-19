@@ -6,6 +6,7 @@ var https = require("https");
 var request = require("request");
 var termList = require("./termList.json");
 var colors = require('colors/safe');
+var downloaded = require("./downloadedPlaylists.json");
 // colors theme
 colors.setTheme({
   silly: 'rainbow',
@@ -72,9 +73,9 @@ for (var i = 2; i < args.length; i++) {
     linkData["album"] = args[i].substring(args[i].indexOf("album")+6, args[i].length);
   } else if (args[i].contains("artist")) {
     linkData["artist"] = args[i].substring(args[i].indexOf("artist")+7, args[i].length);
-  } else if (args[i].contains("--update") || args[i].contains("-u")) {
+  } else if (args[i] === "--update" || args[i] === "-u") {
     // updates the playlists. this will download any new songs in the downloaded playlists.
-    // TODO: make this.
+    linkData["update"] = true;
   }
   if (args[i] === "-o") {
     outputDir = args[i+1];
@@ -138,6 +139,17 @@ function spotifyCallback(res, code, err) {
       spotify.getAlbum(linkData["album"]);
     } else if (linkData.artist) {
       spotify.getArtistAlbums(linkData["artist"]);
+    } else if (linkData.update) {
+      // downloads all the playlists you have downloaded
+      for (var i = 0; i < downloaded.playlist.length; i++) {
+        spotify.getPlaylistTracks(downloaded.playlist[i].playlist, downloaded.playlist[i].username);
+      }
+      for (var i = 0; i < downloaded.album.length; i++) {
+        spotify.getAlbum(downloaded.album[i].album);
+      }
+      for (var i = 0; i < downloaded.artist.length; i++) {
+        spotify.getArtistAlbums(downloaded.artist[i].artist);
+      }
     }
   } else if (code == "artist") {
     for (var i = 0; i < spotifyData.length; i++) {
@@ -147,6 +159,30 @@ function spotifyCallback(res, code, err) {
         } else {
           spotifyData[i]["genre"] = "";
         }
+
+        // if the song is already downloaded skip it
+        for (var bla = 0; bla < downloaded.playlist.length; bla++) {
+          totalSongs--;
+          if (downloaded.playlist[bla].downloaded.find(x => x.artist === spotifyData[i].artist && x.song === spotifyData[i].song)) {
+            checkProgress();
+            return
+          }
+        }
+        for (var bla = 0; bla < downloaded.album.length; bla++) {
+          totalSongs--;
+          if (downloaded.album[bla].downloaded.find(x => x.artist === spotifyData[i].artist && x.song === spotifyData[i].song)) {
+            checkProgress();
+            return
+          }
+        }
+        for (var bla = 0; bla < downloaded.artist.length; bla++) {
+          totalSongs--;
+          if (downloaded.artist[bla].downloaded.find(x => x.artist === spotifyData[i].artist && x.song === spotifyData[i].song)) {
+            checkProgress();
+            return
+          }
+        }
+
         // do a yt search
         ytSearch(spotifyData[i].artist+" - "+spotifyData[i].song, 5, ytApi, (result, i)=>{
           loop1:
@@ -177,7 +213,6 @@ function spotifyCallback(res, code, err) {
             console.log(colors.info(title+" downloaded"));
             //download cover
             downloadImg(spotifyData[i].cover, outputDir+"/covers/"+title, (dir) => {
-              console.log(dir);
               console.log(colors.info("downloaded cover"));
               var options = {
                 "attachments": [dir]
@@ -196,17 +231,7 @@ function spotifyCallback(res, code, err) {
                 } else {
                   console.log(colors.info("wrote metadata successfully"));
                   totalDownloaded++;
-                  var percentage = totalDownloaded/totalSongs*100;
-                  io.emit("progress", percentage);
-                  if (percentage == 100) {
-                    console.log(colors.info("DONE downloading all files"));
-                    app.close();
-                    fs.remove(outputDir+'/covers', (err)=>{
-                      if (err) {
-                        console.log(colors.error("couldn't delete cover folder"));
-                      }
-                    });
-                  }
+                  checkProgress();
                 }
               });
             });
@@ -214,6 +239,33 @@ function spotifyCallback(res, code, err) {
         }, i);
       }
     }
+  }
+}
+
+function checkProgress() {
+  var percentage = totalDownloaded/totalSongs*100;
+  if (totalSongs === 0) {
+    percentage = 100;
+  }
+  io.emit("progress", percentage);
+  if (percentage == 100) {
+    console.log(colors.info("DONE downloading all files"));
+    if (linkData.update) {
+      console.log(colors.info("updated all the files"));
+    }
+    if (linkData["playlist"]) {
+      downloaded.playlist.push({"playlist": linkData.playlist, "username": linkData.username, "downloaded": spotifyData});
+    } else if (linkData["album"]) {
+      downloaded.album.push({"album": linkData.album, "downloaded": spotifyData});
+    } else if (linkData["artist"]) {
+      downloaded.artist.push({"artist": linkData.artist, "downloaded": spotifyData});
+    }
+    app.close();
+    fs.remove(outputDir+'/covers', (err)=>{
+      if (err) {
+        console.log(colors.error("couldn't delete cover folder"));
+      }
+    });
   }
 }
 
@@ -256,6 +308,12 @@ function downloadImg(url, dir, callback){
   });
 }
 
+
+
+process.on("exit", () => {
+  fs.writeFileSync("downloadedPlaylists.json", JSON.stringify(downloaded));
+  console.log("wrote downloadedPlaylists.json file");
+})
 
 
 

@@ -24,3 +24,5 @@ it will download all the songs in the music folder
 
 -o ~/Music
   set the output directory
+-u or --update
+  update all the downloaded playlist, artist and albums
