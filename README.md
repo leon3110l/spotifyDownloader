@@ -19,3 +19,8 @@ npm install
 node index.js <spotify web player link: https://open.spotify.com>
 ```
 it will download all the songs in the music folder
+
+## options
+
+-o ~/Music
+  set the output directory

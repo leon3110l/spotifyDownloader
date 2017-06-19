@@ -22,15 +22,13 @@ colors.setTheme({
 });
 var ffmetadata = require("ffmetadata");
 
+var outputDir = __dirname;
+
 String.prototype.contains = function(p) {
   return (this.indexOf(p) > -1);
 }
 
 var spotify = new spotifyApi("f7fd010eb8204b7aabe4077d249ba905", "dfcc36a349bb4219baade50a51381b9c", spotifyCallback);
-
-// checks if directory covers exists and if not it will make it
-fs.existsSync("covers") || fs.mkdirSync("covers");
-
 
 // get the spotify token from the user
 var app = require('http').createServer(handler);
@@ -63,17 +61,28 @@ console.log(colors.link("https://accounts.spotify.com/authorize/?client_id="+spo
 
 // getting the spotify link
 var args = process.argv;
-var sLink = args[2];
 var linkData = {};
-if (sLink.contains("playlist")) {
-  linkData["username"] = sLink.substring(sLink.indexOf("user")+5, sLink.length);
-  linkData["username"] = linkData["username"].substring(0, linkData["username"].indexOf("/"));
-  linkData["playlist"] = sLink.substring(sLink.indexOf("playlist")+9, sLink.length);
-} else if (sLink.contains("album")) {
-  linkData["album"] = sLink.substring(sLink.indexOf("album")+6, sLink.length);
-} else if (sLink.contains("artist")) {
-  linkData["artist"] = sLink.substring(sLink.indexOf("artist")+7, sLink.length);
+// check the arguments given to the script
+for (var i = 2; i < args.length; i++) {
+  if (args[i].contains("playlist")) {
+    linkData["username"] = args[i].substring(args[i].indexOf("user")+5, args[i].length);
+    linkData["username"] = linkData["username"].substring(0, linkData["username"].indexOf("/"));
+    linkData["playlist"] = args[i].substring(args[i].indexOf("playlist")+9, args[i].length);
+  } else if (args[i].contains("album")) {
+    linkData["album"] = args[i].substring(args[i].indexOf("album")+6, args[i].length);
+  } else if (args[i].contains("artist")) {
+    linkData["artist"] = args[i].substring(args[i].indexOf("artist")+7, args[i].length);
+  } else if (args[i].contains("--update") || args[i].contains("-u")) {
+    // updates the playlists. this will download any new songs in the downloaded playlists.
+    // TODO: make this.
+  }
+  if (args[i] === "-o") {
+    outputDir = args[i+1];
+  }
 }
+
+// checks if directory covers exists and if not it will make it
+fs.existsSync(outputDir + "/covers") || fs.mkdirSync(outputDir + "/covers");
 
 var spotifyData = [];
 var totalSongs = 0;
@@ -164,10 +173,11 @@ function spotifyCallback(res, code, err) {
           // download youtube mp3
           var title = spotifyData[i].artist+" - "+spotifyData[i].song;
           console.log(colors.verbose(title));
-          downloadMp3("https://www.youtube.com/watch?v="+result.items[best].id.videoId, __dirname+"/music/"+title, (error, stdout, stderr, path)=> {
+          downloadMp3("https://www.youtube.com/watch?v="+result.items[best].id.videoId, outputDir+"/music/"+title, (error, stdout, stderr, path)=> {
             console.log(colors.info(title+" downloaded"));
             //download cover
-            downloadImg(spotifyData[i].cover, __dirname+"/covers/"+title, (dir) => {
+            downloadImg(spotifyData[i].cover, outputDir+"/covers/"+title, (dir) => {
+              console.log(dir);
               console.log(colors.info("downloaded cover"));
               var options = {
                 "attachments": [dir]
@@ -191,7 +201,7 @@ function spotifyCallback(res, code, err) {
                   if (percentage == 100) {
                     console.log(colors.info("DONE downloading all files"));
                     app.close();
-                    fs.remove(__dirname+'/covers', (err)=>{
+                    fs.remove(outputDir+'/covers', (err)=>{
                       if (err) {
                         console.log(colors.error("couldn't delete cover folder"));
                       }
@@ -239,7 +249,7 @@ function ytSearch(searchTerm, maxResults, apiKey, callback, i) {
 function downloadImg(url, dir, callback){
   request.head(url, function(err, res, body){
     var ext = "."+res.headers['content-type'].substring("image/".length, res.headers['content-type'].length);
-    dir+= ext;
+    dir += ext;
     request(url).pipe(fs.createWriteStream(dir)).on('close', function() {
       callback(dir);
     });
