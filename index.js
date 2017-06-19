@@ -145,7 +145,7 @@ function spotifyCallback(res, code, err) {
             if (result.items[j].id.kind === 'youtube#video') {
               loop2:
               for (var k = 0; k < termList.length; k++) {
-                if (result.items[j].snippet.title.toLowerCase().contains(termList[k])) {
+                if (result.items[j].snippet.title.toLowerCase().contains(termList[k]) || result.items[j].snippet.channelTitle.toLowerCase().contains(termList[k]) || result.items[j].snippet.channelTitle.toLowerCase().contains(spotifyData[i].artist)) {
                   var best = j;
                   break loop1;
                 }
