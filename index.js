@@ -209,7 +209,7 @@ function spotifyCallback(res, code, err) {
           // download youtube mp3
           var title = spotifyData[i].artist+" - "+spotifyData[i].song;
           console.log(colors.verbose(title));
-          downloadMp3("https://www.youtube.com/watch?v="+result.items[best].id.videoId, outputDir+"/music/"+title, (error, stdout, stderr, path)=> {
+          downloadMp3("https://www.youtube.com/watch?v="+result.items[best].id.videoId, outputDir+"/Music/"+title, (error, stdout, stderr, path)=> {
             console.log(colors.info(title+" downloaded"));
             //download cover
             downloadImg(spotifyData[i].cover, outputDir+"/covers/"+title, (dir) => {
