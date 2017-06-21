@@ -62,18 +62,24 @@ console.log(colors.link("https://accounts.spotify.com/authorize/?client_id="+spo
 
 // getting the spotify link
 var args = process.argv;
-var linkData = {};
+var linkData = {playlist: [], album: [], artist: []};
 // check the arguments given to the script
 for (var i = 2; i < args.length; i++) {
   if (args[i].contains("playlist")) {
-    linkData["username"] = args[i].substring(args[i].indexOf("user")+5, args[i].length);
-    linkData["username"] = linkData["username"].substring(0, linkData["username"].indexOf("/"));
-    linkData["playlist"] = args[i].substring(args[i].indexOf("playlist")+9, args[i].length);
-  } else if (args[i].contains("album")) {
-    linkData["album"] = args[i].substring(args[i].indexOf("album")+6, args[i].length);
-  } else if (args[i].contains("artist")) {
-    linkData["artist"] = args[i].substring(args[i].indexOf("artist")+7, args[i].length);
-  } else if (args[i] === "--update" || args[i] === "-u") {
+    var username = args[i].substring(args[i].indexOf("user")+5, args[i].length);
+    username = username.substring(0, username.indexOf("/"));
+    playlist = args[i].substring(args[i].indexOf("playlist")+9, args[i].length);
+    linkData.playlist.push({username: username, playlist: playlist});
+  }
+  if (args[i].contains("album")) {
+    var album = args[i].substring(args[i].indexOf("album")+6, args[i].length);
+    linkData.album.push({album: album});
+  }
+  if (args[i].contains("artist")) {
+    var artist = args[i].substring(args[i].indexOf("artist")+7, args[i].length);
+    linkData.artist.push({artist: artist});
+  }
+  if (args[i] === "--update" || args[i] === "-u") {
     // updates the playlists. this will download any new songs in the downloaded playlists.
     linkData["update"] = true;
   }
@@ -86,15 +92,25 @@ for (var i = 2; i < args.length; i++) {
 fs.existsSync(outputDir + "/covers") || fs.mkdirSync(outputDir + "/covers");
 
 var spotifyData = [];
+var downloadedData = [];
 var totalSongs = 0;
 var totalDownloaded = 0;
+var songCount = 0; // for debugging
+var youtubeSearches = 0; // for debugging
+var artistCalls = 0; // for debugging
 function spotifyCallback(res, code, err) {
   if (code == "playlistTracks") {
-    totalSongs = res.total;
     if (res.next) {
-      spotify.getPlaylistTracks(linkData["playlist"], linkData["username"], {offset:res.offset+100, limit:100});
+      var playlist = res.href.substring(res.href.indexOf("playlists")+10, res.href.length);
+      playlist = playlist.substring(0, playlist.indexOf("/"));
+      var username = res.href.substring(res.href.indexOf("users")+6, res.href.length);
+      username = username.substring(0, username.indexOf("/"));
+      spotify.getPlaylistTracks(playlist, username, {offset:res.offset+100, limit:100});
+    } else {
+      totalSongs += res.total;
     }
     for (var i = 0; i < res.items.length; i++) {
+      songCount++;
       spotifyData.push({
         "artist": res.items[i].track.artists[0].name,
         "song": res.items[i].track.name,
@@ -104,7 +120,8 @@ function spotifyCallback(res, code, err) {
         "track": null,
         "date": null
       });
-      spotify.getArtist(spotifyData[i+res.offset].id);
+      downloadedData.push({"artist": res.items[i].track.artists[0].name, "song": res.items[i].track.name});
+      spotify.getArtist(res.items[i].track.artists[0].id);
     }
   } else if (code == "artistAlbums") {
     for (var i = 0; i < res.items.length; i++) {
@@ -128,18 +145,28 @@ function spotifyCallback(res, code, err) {
           "cover": res.images[0].url,
           "id": res.artists[0].id
         });
+        downloadedData.push({"artist": res.items[i].track.artists[0].name, "song": res.items[i].track.name});
         totalSongs++;
-        spotify.getArtist(spotifyData[i].id);
+        spotify.getArtist(res.artists[0].id);
       }
     }
   } else if (code == "token") {
-    if (linkData.playlist) {
-      spotify.getPlaylistTracks(linkData["playlist"], linkData["username"]);
-    } else if(linkData.album) {
-      spotify.getAlbum(linkData["album"]);
-    } else if (linkData.artist) {
-      spotify.getArtistAlbums(linkData["artist"]);
-    } else if (linkData.update) {
+    if (linkData.playlist[0]) {
+      for (var i = 0; i < linkData.playlist.length; i++) {
+        spotify.getPlaylistTracks(linkData.playlist[i]["playlist"], linkData.playlist[i]["username"]);
+      }
+    }
+    if(linkData.album[0]) {
+      for (var i = 0; i < linkData.album.length; i++) {
+        spotify.getAlbum(linkData.album[i]["album"]);
+      }
+    }
+    if (linkData.artist[0]) {
+      for (var i = 0; i < linkData.artist.length; i++) {
+        spotify.getArtistAlbums(linkData.artist[i]["artist"]);
+      }
+    }
+    if (linkData.update) {
       // downloads all the playlists you have downloaded
       for (var i = 0; i < downloaded.playlist.length; i++) {
         spotify.getPlaylistTracks(downloaded.playlist[i].playlist, downloaded.playlist[i].username);
@@ -152,93 +179,81 @@ function spotifyCallback(res, code, err) {
       }
     }
   } else if (code == "artist") {
-    for (var i = 0; i < spotifyData.length; i++) {
-      if (spotifyData[i].id === res.id && spotifyData[i].genre === undefined) {
-        if (res.genres[0] != undefined) {
-          spotifyData[i]["genre"] = res.genres[0];
-        } else {
-          spotifyData[i]["genre"] = "";
-        }
-
-        // if the song is already downloaded skip it
-        for (var bla = 0; bla < downloaded.playlist.length; bla++) {
-          totalSongs--;
-          if (downloaded.playlist[bla].downloaded.find(x => x.artist === spotifyData[i].artist && x.song === spotifyData[i].song)) {
-            checkProgress();
-            return
-          }
-        }
-        for (var bla = 0; bla < downloaded.album.length; bla++) {
-          totalSongs--;
-          if (downloaded.album[bla].downloaded.find(x => x.artist === spotifyData[i].artist && x.song === spotifyData[i].song)) {
-            checkProgress();
-            return
-          }
-        }
-        for (var bla = 0; bla < downloaded.artist.length; bla++) {
-          totalSongs--;
-          if (downloaded.artist[bla].downloaded.find(x => x.artist === spotifyData[i].artist && x.song === spotifyData[i].song)) {
-            checkProgress();
-            return
-          }
-        }
-
-        // do a yt search
-        ytSearch(spotifyData[i].artist+" - "+spotifyData[i].song, 5, ytApi, (result, i)=>{
-          loop1:
-          for (var j = 0; j < result.items.length; j++) {
-            if (result.items[j].id.kind === 'youtube#video') {
-              loop2:
-              for (var k = 0; k < termList.length; k++) {
-                if (result.items[j].snippet.title.toLowerCase().contains(termList[k]) || result.items[j].snippet.channelTitle.toLowerCase().contains(termList[k]) || result.items[j].snippet.channelTitle.toLowerCase().contains(spotifyData[i].artist)) {
-                  var best = j;
-                  break loop1;
-                }
-              }
-            }
-          }
-          if (!best) {
-            for (var j = 0; j < result.items.length; j++) {
-              if (result.items[j].id.kind === "youtube#video") {
+    artistCalls++;
+    var spotData = spotifyData.find(x => x.id === res.id); // find the item
+    if (!spotData) {
+      console.log("skipped " + res.name);
+      return
+    }
+    spotifyData.splice(spotifyData.indexOf(spotData), 1); // remove it from the array
+    if (res.genres[0] != undefined) {
+      spotData["genre"] = res.genres[0];
+    } else {
+      spotData["genre"] = "";
+    }
+    // if it finds the song, don't download it
+    if (downloaded.downloaded.find(x => x.artist === spotData.artist && x.song === spotData.song)) {
+      totalSongs--;
+      checkProgress();
+      return
+    }
+    // do a yt search
+    (function(spotData) {
+      ytSearch(spotData.artist+" - "+spotData.song, 5, ytApi, result => {
+        youtubeSearches++;
+        loop1:
+        for (var j = 0; j < result.items.length; j++) {
+          if (result.items[j].id.kind === 'youtube#video') {
+            loop2:
+            for (var k = 0; k < termList.length; k++) {
+              if (result.items[j].snippet.title.toLowerCase().contains(termList[k]) || result.items[j].snippet.channelTitle.toLowerCase().contains(termList[k]) || result.items[j].snippet.channelTitle.toLowerCase().contains(spotData.artist)) {
                 var best = j;
-                break;
+                break loop1;
               }
             }
           }
-          console.log("https://www.youtube.com/watch?v="+colors.verbose(result.items[best].id.videoId));
-          // download youtube mp3
-          var title = spotifyData[i].artist+" - "+spotifyData[i].song;
-          console.log(colors.verbose(title));
-          downloadMp3("https://www.youtube.com/watch?v="+result.items[best].id.videoId, outputDir+"/Music/"+title, (error, stdout, stderr, path)=> {
-            console.log(colors.info(title+" downloaded"));
-            //download cover
-            downloadImg(spotifyData[i].cover, outputDir+"/covers/"+title, (dir) => {
-              console.log(colors.info("downloaded cover"));
-              var options = {
-                "attachments": [dir]
-              };
-              var metadata = {
-                "artist": spotifyData[i].artist,
-                "album": spotifyData[i].album,
-                "title": spotifyData[i].song,
-                "genre": spotifyData[i].genre,
-                "track": spotifyData[i].track,
-                "date": spotifyData[i].date
+        }
+        if (!best) {
+          for (var j = 0; j < result.items.length; j++) {
+            if (result.items[j].id.kind === "youtube#video") {
+              var best = j;
+              break;
+            }
+          }
+        }
+        console.log("https://www.youtube.com/watch?v="+colors.verbose(result.items[best].id.videoId));
+        // download youtube mp3
+        var title = spotData.artist+" - "+spotData.song;
+        console.log(colors.verbose(title));
+        downloadMp3("https://www.youtube.com/watch?v="+result.items[best].id.videoId, outputDir+"/Music/"+title, (error, stdout, stderr, path)=> {
+          console.log(colors.info(title+" downloaded"));
+          //download cover
+          downloadImg(spotData.cover, outputDir+"/covers/"+title, (dir) => {
+            console.log(colors.info("downloaded cover"));
+            var options = {
+              "attachments": [dir]
+            };
+            var metadata = {
+              "artist": spotData.artist,
+              "album": spotData.album,
+              "title": spotData.song,
+              "genre": spotData.genre,
+              "track": spotData.track,
+              "date": spotData.date
+            }
+            ffmetadata.write(path, metadata, options, (err)=> {
+              if (err) {
+                console.log(colors.error("error writing metadata"));
+              } else {
+                console.log(colors.info("wrote metadata successfully"));
+                totalDownloaded++;
+                checkProgress();
               }
-              ffmetadata.write(path, metadata, options, (err)=> {
-                if (err) {
-                  console.log(colors.error("error writing metadata"));
-                } else {
-                  console.log(colors.info("wrote metadata successfully"));
-                  totalDownloaded++;
-                  checkProgress();
-                }
-              });
             });
           });
-        }, i);
-      }
-    }
+        });
+      }, i);
+    }(spotData));
   }
 }
 
@@ -253,13 +268,30 @@ function checkProgress() {
     if (linkData.update) {
       console.log(colors.info("updated all the files"));
     }
-    if (linkData["playlist"]) {
-      downloaded.playlist.push({"playlist": linkData.playlist, "username": linkData.username, "downloaded": spotifyData});
-    } else if (linkData["album"]) {
-      downloaded.album.push({"album": linkData.album, "downloaded": spotifyData});
-    } else if (linkData["artist"]) {
-      downloaded.artist.push({"artist": linkData.artist, "downloaded": spotifyData});
-    }
+
+    linkData.playlist.forEach(item => {
+      // if it doesn't exist, prevents doubles
+      if (!downloaded.playlist.find(x => x.playlist === item.playlist && x.username === item.playlist)) {
+        downloaded.playlist.push({"playlist": item.playlist, "username": item.username});
+      }
+    });
+    linkData.album.forEach(item => {
+      // if it doesn't exist, prevents doubles
+      if (!downloaded.album.find(x => x.album === item.album)) {
+        downloaded.album.push({album: item.album});
+      }
+    });
+    linkData.artist.forEach(item => {
+      // if it doesn't exist, prevents doubles
+      if (!downloaded.artist.find(x => x.artist === item.artist)) {
+        downloaded.artist.push({artist: item.artist});
+      }
+    });
+
+    downloadedData.forEach(item => {
+      downloaded.downloaded.push(item);
+    });
+
     app.close();
     fs.remove(outputDir+'/covers', (err)=>{
       if (err) {
@@ -285,15 +317,20 @@ function downloadMp3(ytLink, path, callback) {
   });
 }
 
-function ytSearch(searchTerm, maxResults, apiKey, callback, i) {
+function ytSearch(searchTerm, maxResults, apiKey, callback) {
   yt.search.list({
     part: "snippet",
     q: searchTerm,
     maxResults: maxResults,
     auth: apiKey
   }, (err, result)=>{
-    callback(result, i);
-    return result;
+    if (err) {
+      console.log(err);
+      ytSearch(searchTerm, maxResults, apiKey, callback); // if error try again
+    } else {
+      callback(result);
+      return result;
+    }
   });
 }
 
@@ -316,6 +353,7 @@ process.on("exit", () => {
 })
 
 
+var apiErrors = 0;
 
 
 // spotifyApi object
@@ -326,6 +364,7 @@ function spotifyApi(client_id, client_secret, callback) {
   this.token;
   this.oauthCode;
   this.callback = callback;
+  this.timeoutTime = 10000; // if it gets an error wait this many seconds and try again.
 }
 
 spotifyApi.prototype.getToken = function() {
@@ -366,8 +405,17 @@ spotifyApi.prototype.getPlaylistTracks = function(playlistId, username, options)
         pageData += chunk;
       });
       res.on('end', ()=> {
-        this.callback(JSON.parse(pageData), "playlistTracks");
-        return JSON.parse(pageData);
+        pageData = JSON.parse(pageData);
+        if (pageData.error && pageData.error.status === 429) {
+          console.log("error");
+          apiErrors++;
+          setTimeout(() => {
+            this.getPlaylistTracks(playlistId, username, options);
+          }, this.timeoutTime);
+        } else {
+          this.callback(pageData, "playlistTracks");
+          return pageData;
+        }
       });
     }
   );
@@ -384,8 +432,17 @@ spotifyApi.prototype.getArtist = function(artistId, options) {
         pageData += chunk;
       });
       res.on('end', ()=> {
-        this.callback(JSON.parse(pageData), "artist");
-        return JSON.parse(pageData);
+        pageData = JSON.parse(pageData);
+        if (pageData.error && pageData.error.status === 429) {
+          console.log("error");
+          apiErrors++;
+          setTimeout(() => {
+            this.getArtist(artistId, options);
+          }, this.timeoutTime);
+        } else {
+          this.callback(pageData, "artist");
+          return pageData;
+        }
       });
     }
   );
@@ -402,8 +459,17 @@ spotifyApi.prototype.getArtistAlbums = function(artistId, options) {
         pageData += chunk;
       });
       res.on('end', ()=> {
-        this.callback(JSON.parse(pageData), "artistAlbums");
-        return JSON.parse(pageData);
+        pageData = JSON.parse(pageData);
+        if (pageData.error && pageData.error.status === 429) {
+          console.log("error");
+          apiErrors++;
+          setTimeout(() => {
+            this.getArtistAlbums(artistId, options);
+          }, this.timeoutTime);
+        } else {
+          this.callback(pageData, "artistAlbums");
+          return pageData;
+        }
       });
     }
   );
@@ -420,12 +486,25 @@ spotifyApi.prototype.getAlbum = function(albumId, options) {
         pageData += chunk;
       });
       res.on('end', ()=> {
-        this.callback(JSON.parse(pageData), "albumTracks");
-        return JSON.parse(pageData);
+        pageData = JSON.parse(pageData);
+        if (pageData.error && pageData.error.status === 429) {
+          console.log("error");
+          apiErrors++;
+          setTimeout(() => {
+            this.getAlbum(albumId, options);
+          }, this.timeoutTime);
+        } else {
+          this.callback(pageData, "albumTracks");
+          return pageData;
+        }
       });
     }
   );
 }
+
+// setInterval(() => {
+//   console.log(apiErrors, songCount, totalSongs, youtubeSearches, artistCalls);
+// }, 10000);
 
 function optionsToUriParams(options) {
   if (!options) {
