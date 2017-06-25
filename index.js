@@ -110,18 +110,26 @@ function spotifyCallback(res, code, err) {
       totalSongs += res.total;
     }
     for (var i = 0; i < res.items.length; i++) {
-      songCount++;
-      spotifyData.push({
-        "artist": res.items[i].track.artists[0].name,
-        "song": res.items[i].track.name,
-        "album": res.items[i].track.album.name,
-        "cover": res.items[i].track.album.images[0].url,
-        "id": res.items[i].track.artists[0].id,
-        "track": null,
-        "date": null
-      });
-      downloadedData.push({"artist": res.items[i].track.artists[0].name, "song": res.items[i].track.name});
-      spotify.getArtist(res.items[i].track.artists[0].id);
+      // if it finds the song, don't download it
+      if (downloaded.downloaded.find(x => x.artist === res.items[i].track.artists[0].name && x.song === res.items[i].track.name)) {
+        found = true;
+        totalSongs--;
+        checkProgress();
+      }
+      if (!found) {
+        songCount++;
+        spotifyData.push({
+          "artist": res.items[i].track.artists[0].name,
+          "song": res.items[i].track.name,
+          "album": res.items[i].track.album.name,
+          "cover": res.items[i].track.album.images[0].url,
+          "id": res.items[i].track.artists[0].id,
+          "track": null,
+          "date": null
+        });
+        downloadedData.push({"artist": res.items[i].track.artists[0].name, "song": res.items[i].track.name});
+        spotify.getArtist(res.items[i].track.artists[0].id);
+      }
     }
   } else if (code == "artistAlbums") {
     for (var i = 0; i < res.items.length; i++) {
@@ -134,6 +142,11 @@ function spotifyCallback(res, code, err) {
         if (spotifyData[j].id == res.artists[0].id && spotifyData[j].song == res.tracks.items[i].name) {
           found = true;
         }
+      }
+      // if it finds the song, don't download it
+      if (downloaded.downloaded.find(x => x.artist === res.artists[0].name && x.song === res.tracks.items[i].name)) {
+        found = true;
+        checkProgress();
       }
       if (!found) {
         spotifyData.push({
